@@ -1,3 +1,4 @@
 flask
 pytube
 boto3
+gunicorn
