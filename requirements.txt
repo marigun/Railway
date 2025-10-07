@@ -2,3 +2,6 @@ flask
 pytube
 boto3
 gunicorn
+yt-dlp
+yt_dlp
+
