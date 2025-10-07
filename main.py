@@ -36,5 +36,16 @@ def upload_video():
 def home():
     return "✅ API is running!"
 
+@app.route("/test", methods=["GET"])
+def test():
+    return jsonify({
+        "status": "ok",
+        "r2_endpoint": os.getenv("R2_ENDPOINT", "NOT SET"),
+        "r2_bucket": os.getenv("R2_BUCKET", "NOT SET"),
+        "has_access_key": "YES" if os.getenv("R2_ACCESS_KEY") else "NO",
+        "has_secret_key": "YES" if os.getenv("R2_SECRET_KEY") else "NO"
+    })
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000)
+    port = int(os.getenv("PORT", 8000))
+    app.run(host="0.0.0.0", port=port)
