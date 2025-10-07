@@ -46,6 +46,4 @@ def test():
         "has_secret_key": "YES" if os.getenv("R2_SECRET_KEY") else "NO"
     })
 
-if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8000))
-    app.run(host="0.0.0.0", port=port)
+# Railway will run this with gunicorn, not directly
