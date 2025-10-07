@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify
 import os
-from pytube import YouTube
+import yt_dlp
 import boto3
 from io import BytesIO
+import tempfile
 
 app = Flask(__name__)
 
