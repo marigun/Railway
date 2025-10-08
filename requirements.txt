@@ -3,6 +3,7 @@ pytube
 boto3
 gunicorn
 yt-dlp
-yt_dlp>=2023.12.30
+yt_dlp>=2024.10.7
+
 
 
