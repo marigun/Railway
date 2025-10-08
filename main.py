@@ -18,15 +18,38 @@ R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
 R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
 R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
 
+# R2 değişkenlerini kontrol et
+def check_r2_config():
+    missing = []
+    if not R2_ACCOUNT_ID:
+        missing.append('R2_ACCOUNT_ID')
+    if not R2_ACCESS_KEY_ID:
+        missing.append('R2_ACCESS_KEY_ID')
+    if not R2_SECRET_ACCESS_KEY:
+        missing.append('R2_SECRET_ACCESS_KEY')
+    if not R2_BUCKET_NAME:
+        missing.append('R2_BUCKET_NAME')
+    
+    if missing:
+        raise ValueError(f"Eksik R2 environment variables: {', '.join(missing)}")
+    
+    logger.info("R2 configuration OK")
+
 # R2 Client
-s3_client = boto3.client(
-    's3',
-    endpoint_url=f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com',
-    aws_access_key_id=R2_ACCESS_KEY_ID,
-    aws_secret_access_key=R2_SECRET_ACCESS_KEY,
-    config=Config(signature_version='s3v4'),
-    region_name='auto'
-)
+try:
+    check_r2_config()
+    s3_client = boto3.client(
+        's3',
+        endpoint_url=f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com',
+        aws_access_key_id=R2_ACCESS_KEY_ID,
+        aws_secret_access_key=R2_SECRET_ACCESS_KEY,
+        config=Config(signature_version='s3v4'),
+        region_name='auto'
+    )
+    logger.info("R2 client initialized successfully")
+except Exception as e:
+    logger.error(f"R2 client initialization failed: {str(e)}")
+    s3_client = None
 
 def download_video(youtube_url):
     """YouTube videosunu indir"""
@@ -73,10 +96,14 @@ def download_video(youtube_url):
 def upload_to_r2(local_path, video_id, video_ext):
     """Videoyu R2'ye yükle"""
     try:
+        if not s3_client:
+            raise Exception("R2 client başlatılamadı. Environment variables kontrol edin.")
+        
         # R2'deki dosya adı
         r2_key = f"videos/{video_id}.{video_ext}"
         
         logger.info(f"R2'ye yükleniyor: {r2_key}")
+        logger.info(f"Bucket: {R2_BUCKET_NAME}")
         
         # Dosyayı yükle
         with open(local_path, 'rb') as file:
