@@ -19,7 +19,7 @@ R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY')
 R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_KEY')
 R2_BUCKET_NAME = os.environ.get('R2_BUCKET')
 
-# Account ID (opsiyonel)
+# Account ID (opsiyonel, public URL için)
 if R2_ENDPOINT:
     R2_ACCOUNT_ID = R2_ENDPOINT.split('//')[1].split('.')[0] if '//' in R2_ENDPOINT else None
 else:
@@ -61,27 +61,19 @@ except Exception as e:
 
 
 def download_video(youtube_url):
-    """YouTube videosunu en yüksek kalitede indir (yeniden encode etmeden)."""
+    """YouTube videosunu en yüksek kalitede indir"""
     temp_dir = tempfile.mkdtemp()
 
     ydl_opts = {
-        # En yüksek çözünürlükte video + ses
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
         'merge_output_format': 'mp4',
-
-        # Yeniden encode ETMEDEN biçim dönüştür
+        'quiet': False,
+        'no_warnings': False,
         'postprocessors': [{
-            'key': 'FFmpegVideoRemuxer',
+            'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4'
         }],
-
-        # Log detayları
-        'quiet': False,
-        'verbose': True,
-        'no_warnings': False,
-
-        # YouTube client ve header ayarları
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios', 'web']
@@ -118,7 +110,7 @@ def download_video(youtube_url):
             'merge_output_format': 'mp4',
             'quiet': True,
             'postprocessors': [{
-                'key': 'FFmpegVideoRemuxer',
+                'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4'
             }]
         }
