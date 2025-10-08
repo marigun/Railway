@@ -89,4 +89,117 @@ def download_video(youtube_url):
     }
 
     try:
-        logger.info(f"İndirme başlıyor: {y
+        logger.info(f"İndirme başlıyor: {youtube_url}")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+            video_id = info['id']
+            video_ext = 'mp4'
+            video_title = info.get('title', 'video')
+            local_path = os.path.join(temp_dir, f"{video_id}.mp4")
+
+            logger.info(f"Video indirildi: {local_path}")
+            return local_path, video_id, video_ext, video_title, temp_dir
+
+    except Exception as first_error:
+        logger.warning(f"İlk deneme başarısız: {str(first_error)}")
+        logger.info("Alternatif yöntem deneniyor...")
+
+        fallback_opts = {
+            'format': 'bestvideo+bestaudio/best',
+            'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+            'merge_output_format': 'mp4',
+            'quiet': True,
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4'
+            }]
+        }
+
+        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+            info = ydl.extract_info(youtube_url, download=True)
+            video_id = info['id']
+            video_ext = 'mp4'
+            video_title = info.get('title', 'video')
+            local_path = os.path.join(temp_dir, f"{video_id}.mp4")
+
+            logger.info(f"Video indirildi (fallback): {local_path}")
+            return local_path, video_id, video_ext, video_title, temp_dir
+
+
+def upload_to_r2(local_path, video_id, video_ext):
+    """Videoyu R2'ye yükle"""
+    if not s3_client:
+        raise Exception("R2 client başlatılamadı. Environment variables kontrol edin.")
+
+    r2_key = f"videos/{video_id}.{video_ext}"
+
+    logger.info(f"R2'ye yükleniyor: {r2_key}")
+    with open(local_path, 'rb') as file:
+        s3_client.upload_fileobj(
+            file,
+            R2_BUCKET_NAME,
+            r2_key,
+            ExtraArgs={'ContentType': 'video/mp4'}
+        )
+
+    if R2_ACCOUNT_ID:
+        public_url = f"https://{R2_ACCOUNT_ID}.r2.dev/{r2_key}"
+    else:
+        public_url = f"{R2_ENDPOINT.rstrip('/')}/{R2_BUCKET_NAME}/{r2_key}"
+
+    logger.info(f"Yükleme tamamlandı: {public_url}")
+    return public_url, r2_key
+
+
+def cleanup(temp_dir):
+    """Geçici dosyaları temizle"""
+    try:
+        shutil.rmtree(temp_dir)
+        logger.info("Geçici dosyalar temizlendi")
+    except Exception as e:
+        logger.error(f"Temizleme hatası: {str(e)}")
+
+
+@app.route('/upload', methods=['POST'])
+@app.route('/upload_video', methods=['POST'])
+def upload_video():
+    temp_dir = None
+    try:
+        data = request.get_json()
+        youtube_url = data.get('yt_url') or data.get('url')
+
+        if not youtube_url:
+            return jsonify({
+                'error': 'YouTube URL gerekli (yt_url veya url parametresi)',
+                'success': False
+            }), 400
+
+        logger.info(f"İşlem başladı: {youtube_url}")
+
+        local_path, video_id, video_ext, video_title, temp_dir = download_video(youtube_url)
+        public_url, r2_key = upload_to_r2(local_path, video_id, video_ext)
+        cleanup(temp_dir)
+
+        return jsonify({
+            'success': True,
+            'video_id': video_id,
+            'video_title': video_title,
+            'r2_url': public_url,
+            'r2_key': r2_key
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Hata: {str(e)}")
+        if temp_dir:
+            cleanup(temp_dir)
+        return jsonify({'error': str(e), 'success': False}), 500
+
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy'}), 200
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
