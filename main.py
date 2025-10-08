@@ -34,26 +34,22 @@ def download_video(youtube_url):
         # Geçici dizin oluştur
         temp_dir = tempfile.mkdtemp()
         
-        # yt-dlp ayarları - Çerez ve User-Agent ekle
+        # yt-dlp ayarları - Android client kullan (çerez gerektirmez)
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
             'quiet': False,
             'no_warnings': False,
-            # Bot korumasını aşmak için ayarlar
-            'cookiesfrombrowser': ('chrome',),  # Chrome tarayıcısından çerezleri kullan
+            # Android client kullan - bot korumasını bypass eder
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android', 'web'],
+                    'player_client': ['android'],
                     'skip': ['dash', 'hls']
                 }
             },
-            # User-Agent ekle
+            # Android User-Agent
             'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'Accept-Language': 'en-us,en;q=0.5',
-                'Sec-Fetch-Mode': 'navigate',
+                'User-Agent': 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip',
             }
         }
         
@@ -111,6 +107,7 @@ def cleanup(temp_dir):
     except Exception as e:
         logger.error(f"Temizleme hatası: {str(e)}")
 
+@app.route('/upload', methods=['POST'])
 @app.route('/upload_video', methods=['POST'])
 def upload_video():
     """YouTube videosunu indir ve R2'ye yükle"""
@@ -120,13 +117,14 @@ def upload_video():
         # Request'ten YouTube URL'ini al
         data = request.get_json()
         
-        if not data or 'yt_url' not in data:
+        # Hem 'url' hem 'yt_url' parametresini kabul et
+        youtube_url = data.get('yt_url') or data.get('url')
+        
+        if not youtube_url:
             return jsonify({
-                'error': 'YouTube URL gerekli',
+                'error': 'YouTube URL gerekli (yt_url veya url parametresi)',
                 'success': False
             }), 400
-        
-        youtube_url = data['yt_url']
         logger.info(f"İşlem başladı: {youtube_url}")
         
         # Videoyu indir
