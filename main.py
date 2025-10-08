@@ -63,37 +63,72 @@ def download_video(youtube_url):
         # Geçici dizin oluştur
         temp_dir = tempfile.mkdtemp()
         
-        # yt-dlp ayarları - Android client kullan (çerez gerektirmez)
+        # yt-dlp ayarları - Birden fazla yöntem dene
         ydl_opts = {
             'format': 'best[ext=mp4]/best',
             'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
             'quiet': False,
             'no_warnings': False,
-            # Android client kullan - bot korumasını bypass eder
+            # Birden fazla player client dene
             'extractor_args': {
                 'youtube': {
-                    'player_client': ['android'],
+                    'player_client': ['android', 'ios', 'web'],
                     'skip': ['dash', 'hls']
                 }
             },
-            # Android User-Agent
+            # iOS User-Agent (daha az kısıtlama)
             'http_headers': {
-                'User-Agent': 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip',
-            }
+                'User-Agent': 'com.google.ios.youtube/19.09.3 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)',
+                'Accept': '*/*',
+                'Accept-Language': 'en-US,en;q=0.9',
+            },
+            # Ek ayarlar
+            'nocheckcertificate': True,
+            'geo_bypass': True,
+            'age_limit': None,
         }
         
         logger.info(f"İndirme başlıyor: {youtube_url}")
         
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(youtube_url, download=True)
-            video_id = info['id']
-            video_ext = info['ext']
-            video_title = info['title']
-            local_path = os.path.join(temp_dir, f"{video_id}.{video_ext}")
+        # Önce extract_info ile test et, hata alırsa alternatif yöntem dene
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(youtube_url, download=True)
+                video_id = info['id']
+                video_ext = info['ext']
+                video_title = info['title']
+                local_path = os.path.join(temp_dir, f"{video_id}.{video_ext}")
+                
+                logger.info(f"Video indirildi: {local_path}")
+                
+                return local_path, video_id, video_ext, video_title, temp_dir
+                
+        except Exception as first_error:
+            logger.warning(f"İlk deneme başarısız: {str(first_error)}")
+            logger.info("Alternatif yöntem deneniyor...")
             
-            logger.info(f"Video indirildi: {local_path}")
+            # Alternatif: Sadece android client, daha basit ayarlar
+            ydl_opts_fallback = {
+                'format': 'worst[ext=mp4]/worst',  # Daha düşük kalite dene
+                'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+                'quiet': True,
+                'extractor_args': {
+                    'youtube': {
+                        'player_client': ['android_embedded'],
+                    }
+                },
+            }
             
-            return local_path, video_id, video_ext, video_title, temp_dir
+            with yt_dlp.YoutubeDL(ydl_opts_fallback) as ydl:
+                info = ydl.extract_info(youtube_url, download=True)
+                video_id = info['id']
+                video_ext = info['ext']
+                video_title = info['title']
+                local_path = os.path.join(temp_dir, f"{video_id}.{video_ext}")
+                
+                logger.info(f"Video indirildi (alternatif yöntem): {local_path}")
+                
+                return local_path, video_id, video_ext, video_title, temp_dir
             
     except Exception as e:
         logger.error(f"Video indirme hatası: {str(e)}")
