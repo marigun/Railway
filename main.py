@@ -64,26 +64,43 @@ def download_video(youtube_url):
     """YouTube videosunu en yüksek kalitede indir"""
     temp_dir = tempfile.mkdtemp()
 
-    ydl_opts = {
-        # EN YÜKSEK KALİTE: Video ve ses ayrı indirilip birleştirilir
-        'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best',
-        'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+    # Önce video bilgilerini al (indirmeden)
+    info_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'extract_flat': False,
+    }
+    
+    with yt_dlp.YoutubeDL(info_opts) as ydl:
+        info = ydl.extract_info(youtube_url, download=False)
         
-        # Video ve sesi birleştir (yeniden encode ETMEDEN)
+        # Mevcut formatları logla
+        logger.info("=== Mevcut Video Formatları ===")
+        for f in info.get('formats', []):
+            logger.info(f"ID: {f.get('format_id')} | Resolution: {f.get('width')}x{f.get('height')} | "
+                       f"Ext: {f.get('ext')} | FPS: {f.get('fps')} | VCodec: {f.get('vcodec')} | ACodec: {f.get('acodec')}")
+
+    ydl_opts = {
+        # SHORTS için özel format seçimi - en yüksek çözünürlük
+        'format': (
+            'bestvideo[height>=1080][ext=mp4]+bestaudio[ext=m4a]/'  # 1080p+ mp4
+            'bestvideo[height>=720][ext=mp4]+bestaudio[ext=m4a]/'   # 720p+ mp4
+            'bestvideo[ext=mp4]+bestaudio[ext=m4a]/'                # herhangi mp4
+            'bestvideo+bestaudio/'                                   # herhangi format
+            'best'                                                   # son çare
+        ),
+        'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
         'merge_output_format': 'mp4',
         
-        # FFmpeg ile format dönüştürme (kalite kaybı YOK)
         'postprocessors': [{
             'key': 'FFmpegVideoConvertor',
             'preferedformat': 'mp4',
         }],
         
-        # Log detayları
         'quiet': False,
         'verbose': True,
         'no_warnings': False,
         
-        # YouTube bot korumasını aş
         'extractor_args': {
             'youtube': {
                 'player_client': ['android', 'ios', 'web'],
@@ -109,10 +126,12 @@ def download_video(youtube_url):
             video_ext = 'mp4'
             video_title = info.get('title', 'video')
             
-            # Format bilgilerini logla
-            logger.info(f"Video Format: {info.get('format', 'unknown')}")
-            logger.info(f"Resolution: {info.get('width', '?')}x{info.get('height', '?')}")
-            logger.info(f"FPS: {info.get('fps', '?')}")
+            # Seçilen format bilgilerini logla
+            logger.info(f"✓ Seçilen Format: {info.get('format', 'unknown')}")
+            logger.info(f"✓ Çözünürlük: {info.get('width', '?')}x{info.get('height', '?')}")
+            logger.info(f"✓ FPS: {info.get('fps', '?')}")
+            logger.info(f"✓ Video Codec: {info.get('vcodec', '?')}")
+            logger.info(f"✓ Audio Codec: {info.get('acodec', '?')}")
             
             local_path = os.path.join(temp_dir, f"{video_id}.mp4")
             
@@ -123,10 +142,11 @@ def download_video(youtube_url):
         logger.warning(f"İlk deneme başarısız: {str(first_error)}")
         logger.info("Alternatif yöntem deneniyor...")
 
-        # Fallback: Daha basit format seçimi
+        # Fallback: En yüksek çözünürlüklü formatı seç
         fallback_opts = {
-            'format': 'best[ext=mp4]/best',  # En iyi mp4 formatı
+            'format': 'bestvideo+bestaudio/best',
             'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+            'merge_output_format': 'mp4',
             'quiet': True,
             'extractor_args': {
                 'youtube': {
@@ -141,7 +161,6 @@ def download_video(youtube_url):
             video_ext = info.get('ext', 'mp4')
             video_title = info.get('title', 'video')
             
-            # İndirilen dosyayı bul
             files = os.listdir(temp_dir)
             local_path = os.path.join(temp_dir, files[0]) if files else None
             
@@ -149,6 +168,7 @@ def download_video(youtube_url):
                 raise Exception("Video dosyası bulunamadı")
 
             logger.info(f"Video indirildi (fallback): {local_path}")
+            logger.info(f"Çözünürlük: {info.get('width', '?')}x{info.get('height', '?')}")
             return local_path, video_id, video_ext, video_title, temp_dir
 
 
