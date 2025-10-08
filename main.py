@@ -12,23 +12,29 @@ app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# R2 Configuration
-R2_ACCOUNT_ID = os.environ.get('R2_ACCOUNT_ID')
-R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY_ID')
-R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_ACCESS_KEY')
-R2_BUCKET_NAME = os.environ.get('R2_BUCKET_NAME')
+# R2 Configuration - Railway'deki değişken isimleriyle eşleşiyor
+R2_ENDPOINT = os.environ.get('R2_ENDPOINT')  # https://a20...r2.cloudflarestorage.com
+R2_ACCESS_KEY_ID = os.environ.get('R2_ACCESS_KEY')
+R2_SECRET_ACCESS_KEY = os.environ.get('R2_SECRET_KEY')
+R2_BUCKET_NAME = os.environ.get('R2_BUCKET')  # youtube-storage
+
+# Endpoint'ten account ID'yi çıkar (opsiyonel, URL için)
+if R2_ENDPOINT:
+    R2_ACCOUNT_ID = R2_ENDPOINT.split('//')[1].split('.')[0] if '//' in R2_ENDPOINT else None
+else:
+    R2_ACCOUNT_ID = None
 
 # R2 değişkenlerini kontrol et
 def check_r2_config():
     missing = []
-    if not R2_ACCOUNT_ID:
-        missing.append('R2_ACCOUNT_ID')
+    if not R2_ENDPOINT:
+        missing.append('R2_ENDPOINT')
     if not R2_ACCESS_KEY_ID:
-        missing.append('R2_ACCESS_KEY_ID')
+        missing.append('R2_ACCESS_KEY')
     if not R2_SECRET_ACCESS_KEY:
-        missing.append('R2_SECRET_ACCESS_KEY')
+        missing.append('R2_SECRET_KEY')
     if not R2_BUCKET_NAME:
-        missing.append('R2_BUCKET_NAME')
+        missing.append('R2_BUCKET')
     
     if missing:
         raise ValueError(f"Eksik R2 environment variables: {', '.join(missing)}")
@@ -40,7 +46,7 @@ try:
     check_r2_config()
     s3_client = boto3.client(
         's3',
-        endpoint_url=f'https://{R2_ACCOUNT_ID}.r2.cloudflarestorage.com',
+        endpoint_url=R2_ENDPOINT,
         aws_access_key_id=R2_ACCESS_KEY_ID,
         aws_secret_access_key=R2_SECRET_ACCESS_KEY,
         config=Config(signature_version='s3v4'),
@@ -114,8 +120,12 @@ def upload_to_r2(local_path, video_id, video_ext):
                 ExtraArgs={'ContentType': 'video/mp4'}
             )
         
-        # Public URL oluştur
-        public_url = f"https://{R2_BUCKET_NAME}.r2.dev/{r2_key}"
+        # Public URL oluştur (R2 public domain varsa kullan)
+        if R2_ACCOUNT_ID:
+            public_url = f"https://{R2_ACCOUNT_ID}.r2.dev/{r2_key}"
+        else:
+            # Varsayılan format
+            public_url = f"{R2_ENDPOINT.rstrip('/')}/{R2_BUCKET_NAME}/{r2_key}"
         
         logger.info(f"Yükleme tamamlandı: {public_url}")
         
